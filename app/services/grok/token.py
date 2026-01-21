@@ -29,6 +29,9 @@ COOLDOWN_REQUESTS = 5              # 普通失败冷却请求数
 COOLDOWN_429_WITH_QUOTA = 3600     # 429+有额度冷却1小时（秒）
 COOLDOWN_429_NO_QUOTA = 36000      # 429+无额度冷却10小时（秒）
 
+# 自动恢复常量
+AUTO_RECOVERY_INTERVAL = 1800      # 自动恢复间隔30分钟（秒）
+
 
 class GrokTokenManager:
     """Token管理器（单例）"""
@@ -63,6 +66,11 @@ class GrokTokenManager:
         # 刷新状态
         self._refresh_lock = False  # 刷新锁
         self._refresh_progress: Dict[str, Any] = {"running": False, "current": 0, "total": 0, "success": 0, "failed": 0}
+        
+        # 自动恢复状态
+        self._auto_recovery_task = None  # 自动恢复任务
+        self._auto_recovery_enabled = True  # 是否启用自动恢复
+        self._auto_recovery_progress: Dict[str, Any] = {"running": False, "current": 0, "total": 0, "recovered": 0, "failed": 0, "last_run": None}
         
         self._initialized = True
         logger.debug(f"[Token] 初始化完成: {self.token_file}")
@@ -614,6 +622,155 @@ class GrokTokenManager:
         """获取刷新进度"""
         return self._refresh_progress.copy()
 
+    async def recover_token_status(self, token: str, token_type: TokenType) -> bool:
+        """恢复Token状态从失效到正常"""
+        try:
+            if token not in self.token_data[token_type.value]:
+                logger.warning(f"[Token] 未找到Token: {token[:10]}...")
+                return False
+
+            data = self.token_data[token_type.value][token]
+            
+            # 如果状态是expired，恢复为active
+            if data.get("status") == "expired":
+                data["status"] = "active"
+                data["failedCount"] = 0
+                data["lastFailureTime"] = None
+                data["lastFailureReason"] = None
+                self._mark_dirty()
+                logger.info(f"[Token] 恢复Token状态: {token[:10]}... (expired -> active)")
+                return True
+            else:
+                logger.debug(f"[Token] Token状态正常，无需恢复: {token[:10]}...")
+                return False
+
+        except Exception as e:
+            logger.error(f"[Token] 恢复Token状态错误: {e}")
+            return False
+    
+    async def auto_recovery_expired_tokens(self) -> Dict[str, Any]:
+        """自动恢复所有失效的Token（通过测试验证）"""
+        if self._auto_recovery_progress.get("running"):
+            return {"error": "recovery_in_progress", "message": "恢复任务正在进行中", "progress": self._auto_recovery_progress}
+        
+        try:
+            # 收集所有 expired 状态的 Token
+            expired_tokens = []
+            for token_type in [TokenType.NORMAL.value, TokenType.SUPER.value]:
+                for sso, data in self.token_data.get(token_type, {}).items():
+                    if data.get("status") == "expired":
+                        expired_tokens.append((token_type, sso))
+            
+            total = len(expired_tokens)
+            if total == 0:
+                logger.info("[Token] 没有需要恢复的 expired Token")
+                return {"recovered": 0, "failed": 0, "total": 0, "message": "没有需要恢复的Token"}
+            
+            self._auto_recovery_progress = {
+                "running": True, 
+                "current": 0, 
+                "total": total, 
+                "recovered": 0, 
+                "failed": 0,
+                "last_run": int(time.time() * 1000)
+            }
+            
+            recovered_count = 0
+            fail_count = 0
+            
+            for i, (token_type, sso) in enumerate(expired_tokens):
+                auth_token = f"sso-rw={sso};sso={sso}"
+                try:
+                    # 通过 check_limits 验证 Token 是否有效
+                    result = await self.check_limits(auth_token, "grok-4-fast")
+                    if result:
+                        # Token 有效，恢复状态
+                        tt = TokenType.NORMAL if token_type == TokenType.NORMAL.value else TokenType.SUPER
+                        await self.recover_token_status(sso, tt)
+                        recovered_count += 1
+                        logger.info(f"[Token] 自动恢复成功: {sso[:10]}... (验证通过)")
+                    else:
+                        # Token 确实失效
+                        fail_count += 1
+                        logger.debug(f"[Token] Token确认失效: {sso[:10]}...")
+                except Exception as e:
+                    fail_count += 1
+                    logger.warning(f"[Token] 恢复验证失败: {sso[:10]}... - {e}")
+                
+                # 更新进度
+                self._auto_recovery_progress = {
+                    "running": True,
+                    "current": i + 1,
+                    "total": total,
+                    "recovered": recovered_count,
+                    "failed": fail_count,
+                    "last_run": int(time.time() * 1000)
+                }
+                await asyncio.sleep(0.2)  # 避免请求过快
+            
+            logger.info(f"[Token] 自动恢复完成: 恢复{recovered_count}个, 确认失效{fail_count}个")
+            self._auto_recovery_progress = {
+                "running": False,
+                "current": total,
+                "total": total,
+                "recovered": recovered_count,
+                "failed": fail_count,
+                "last_run": int(time.time() * 1000)
+            }
+            return {"recovered": recovered_count, "failed": fail_count, "total": total}
+        
+        except Exception as e:
+            logger.error(f"[Token] 自动恢复错误: {e}")
+            self._auto_recovery_progress["running"] = False
+            return {"error": str(e), "recovered": 0, "failed": 0}
+    
+    async def _auto_recovery_worker(self) -> None:
+        """自动恢复后台任务"""
+        interval = setting.global_config.get("auto_recovery_interval", AUTO_RECOVERY_INTERVAL)
+        logger.info(f"[Token] 自动恢复任务已启动，间隔: {interval}s")
+        
+        while not self._shutdown and self._auto_recovery_enabled:
+            await asyncio.sleep(interval)
+            
+            if not self._shutdown and self._auto_recovery_enabled:
+                try:
+                    logger.info("[Token] 执行定期自动恢复检查...")
+                    await self.auto_recovery_expired_tokens()
+                except Exception as e:
+                    logger.error(f"[Token] 自动恢复任务错误: {e}")
+    
+    async def start_auto_recovery(self) -> None:
+        """启动自动恢复任务"""
+        if self._auto_recovery_task is None:
+            self._auto_recovery_enabled = True
+            self._auto_recovery_task = asyncio.create_task(self._auto_recovery_worker())
+            logger.info("[Token] 自动恢复任务已创建")
+    
+    async def stop_auto_recovery(self) -> None:
+        """停止自动恢复任务"""
+        self._auto_recovery_enabled = False
+        if self._auto_recovery_task:
+            self._auto_recovery_task.cancel()
+            try:
+                await self._auto_recovery_task
+            except asyncio.CancelledError:
+                pass
+            self._auto_recovery_task = None
+            logger.info("[Token] 自动恢复任务已停止")
+    
+    def set_auto_recovery_enabled(self, enabled: bool) -> None:
+        """设置自动恢复启用状态"""
+        self._auto_recovery_enabled = enabled
+        logger.info(f"[Token] 自动恢复已{'启用' if enabled else '禁用'}")
+    
+    def get_auto_recovery_status(self) -> Dict[str, Any]:
+        """获取自动恢复状态"""
+        return {
+            "enabled": self._auto_recovery_enabled,
+            "progress": self._auto_recovery_progress.copy()
+        }
+
 
 # 全局实例
 token_manager = GrokTokenManager()
+

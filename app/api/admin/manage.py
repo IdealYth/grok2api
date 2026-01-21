@@ -1015,3 +1015,75 @@ async def clear_logs(_: bool = Depends(verify_admin_session)) -> Dict[str, Any]:
         logger.error(f"[Admin] 清空日志失败: {e}")
         raise HTTPException(status_code=500, detail={"error": f"清空失败: {e}"})
 
+
+# === Token 自动恢复 ===
+
+@router.get("/api/tokens/recovery/status")
+async def get_recovery_status(_: bool = Depends(verify_admin_session)) -> Dict[str, Any]:
+    """获取自动恢复状态"""
+    try:
+        status = token_manager.get_auto_recovery_status()
+        return {"success": True, "data": status}
+    except Exception as e:
+        logger.error(f"[Admin] 获取恢复状态失败: {e}")
+        raise HTTPException(status_code=500, detail={"error": f"获取失败: {e}"})
+
+
+@router.post("/api/tokens/recovery/toggle")
+async def toggle_recovery(request: Dict[str, bool], _: bool = Depends(verify_admin_session)) -> Dict[str, Any]:
+    """切换自动恢复开关"""
+    try:
+        enabled = request.get("enabled", True)
+        token_manager.set_auto_recovery_enabled(enabled)
+        
+        if enabled:
+            await token_manager.start_auto_recovery()
+        else:
+            await token_manager.stop_auto_recovery()
+        
+        return {"success": True, "message": f"自动恢复已{'启用' if enabled else '禁用'}", "enabled": enabled}
+    except Exception as e:
+        logger.error(f"[Admin] 切换恢复状态失败: {e}")
+        raise HTTPException(status_code=500, detail={"error": f"切换失败: {e}"})
+
+
+@router.post("/api/tokens/recovery/run")
+async def run_recovery(_: bool = Depends(verify_admin_session)) -> Dict[str, Any]:
+    """手动运行恢复检测"""
+    import asyncio
+    
+    try:
+        # 检查是否已在运行
+        status = token_manager.get_auto_recovery_status()
+        if status["progress"].get("running"):
+            return {
+                "success": False,
+                "message": "恢复任务正在进行中",
+                "data": status["progress"]
+            }
+        
+        # 后台启动恢复任务
+        logger.info("[Admin] 启动后台恢复任务")
+        asyncio.create_task(token_manager.auto_recovery_expired_tokens())
+        
+        return {
+            "success": True,
+            "message": "恢复任务已启动",
+            "data": {"started": True}
+        }
+    except Exception as e:
+        logger.error(f"[Admin] 启动恢复任务失败: {e}")
+        raise HTTPException(status_code=500, detail={"error": f"启动失败: {e}"})
+
+
+@router.get("/api/tokens/recovery/progress")
+async def get_recovery_progress(_: bool = Depends(verify_admin_session)) -> Dict[str, Any]:
+    """获取恢复进度"""
+    try:
+        status = token_manager.get_auto_recovery_status()
+        return {"success": True, "data": status["progress"]}
+    except Exception as e:
+        logger.error(f"[Admin] 获取恢复进度失败: {e}")
+        raise HTTPException(status_code=500, detail={"error": f"获取失败: {e}"})
+
+

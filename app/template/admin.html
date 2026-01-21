@@ -318,7 +318,27 @@
 
         <div class="rounded-lg border border-border bg-background p-4">
           <p class="text-sm font-medium text-muted-foreground mb-2">Token 失效</p>
-          <h3 class="text-xl font-bold text-destructive" id="statExpired">-</h3>
+          <div class="flex items-center justify-between">
+            <h3 class="text-xl font-bold text-destructive" id="statExpired">-</h3>
+            <button onclick="runRecovery()"
+              class="inline-flex items-center justify-center rounded-md text-xs font-medium bg-green-600 text-white hover:bg-green-700 h-7 px-2 transition-colors"
+              title="尝试恢复失效Token">
+              <svg class="h-3 w-3 mr-1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" stroke-width="2">
+                <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                <path d="M3 3v5h5" />
+                <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
+                <path d="M16 21h5v-5" />
+              </svg>
+              恢复
+            </button>
+          </div>
+          <div class="flex items-center gap-2 mt-2">
+            <span id="autoRecoveryStatus"
+              class="inline-flex items-center text-xs px-1.5 py-0.5 rounded bg-green-100 text-green-700">自动恢复: 开</span>
+            <button onclick="toggleAutoRecovery()" id="autoRecoveryToggle"
+              class="text-xs text-muted-foreground hover:text-foreground underline">切换</button>
+          </div>
         </div>
 
         <div class="rounded-lg border border-border bg-background p-4">
@@ -1411,6 +1431,88 @@
       navigator.clipboard.writeText(text).then(() => showToast('已复制到剪贴板')).catch(() => showToast('复制失败', 'error'));
     };
 
+    // --- Token 自动恢复 ---
+
+    let recoveryPollingId = null;
+
+    const loadRecoveryStatus = async () => {
+      try {
+        const r = await apiRequest('/api/tokens/recovery/status');
+        if (!r) return;
+        const d = await r.json();
+        if (d.success && d.data) {
+          const statusEl = $('autoRecoveryStatus');
+          if (statusEl) {
+            if (d.data.enabled) {
+              statusEl.textContent = '自动恢复: 开';
+              statusEl.className = 'inline-flex items-center text-xs px-1.5 py-0.5 rounded bg-green-100 text-green-700';
+            } else {
+              statusEl.textContent = '自动恢复: 关';
+              statusEl.className = 'inline-flex items-center text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-500';
+            }
+          }
+        }
+      } catch (e) { console.error('加载恢复状态失败:', e) }
+    };
+
+    const toggleAutoRecovery = async () => {
+      try {
+        const r = await apiRequest('/api/tokens/recovery/status');
+        if (!r) return;
+        const d = await r.json();
+        const currentEnabled = d.success ? d.data.enabled : true;
+
+        const tr = await apiRequest('/api/tokens/recovery/toggle', {
+          method: 'POST',
+          body: JSON.stringify({ enabled: !currentEnabled })
+        });
+        const td = await tr.json();
+        if (td.success) {
+          showToast(td.message);
+          loadRecoveryStatus();
+        } else {
+          showToast('切换失败: ' + (td.error || '未知错误'), 'error');
+        }
+      } catch (e) { showToast('切换失败: ' + e.message, 'error') }
+    };
+
+    const runRecovery = async () => {
+      try {
+        const r = await apiRequest('/api/tokens/recovery/run', { method: 'POST' });
+        if (!r) return;
+        const d = await r.json();
+        if (d.success) {
+          showToast('恢复任务已启动，正在检测失效Token...');
+          startRecoveryPolling();
+        } else {
+          showToast(d.message || '恢复任务已在进行中', 'info');
+        }
+      } catch (e) { showToast('启动恢复失败: ' + e.message, 'error') }
+    };
+
+    const startRecoveryPolling = () => {
+      if (recoveryPollingId) return;
+      recoveryPollingId = setInterval(async () => {
+        try {
+          const r = await apiRequest('/api/tokens/recovery/progress');
+          if (!r) return;
+          const d = await r.json();
+          if (d.success && d.data) {
+            if (!d.data.running) {
+              clearInterval(recoveryPollingId);
+              recoveryPollingId = null;
+              const msg = `恢复完成: 成功恢复 ${d.data.recovered} 个, 确认失效 ${d.data.failed} 个`;
+              showToast(msg, d.data.recovered > 0 ? 'success' : 'info');
+              // 刷新Token列表
+              setTimeout(() => {
+                if (typeof loadTokens === 'function') loadTokens();
+              }, 500);
+            }
+          }
+        } catch (e) { console.error('轮询恢复进度失败:', e) }
+      }, 1500);
+    };
+
     // --- 日志审计 ---
 
     const loadLogs = async () => {
@@ -1851,7 +1953,7 @@
     const saveGrokSettings = async () => { const pu = $('cfgProxyUrl').value.trim(), cf = $('cfgCfClearance').value.trim(); const cleanCf = cf.startsWith('cf_clearance=') ? cf.split('cf_clearance=')[1] : cf; const retryCodesStr = $('cfgRetryStatusCodes').value.trim(); const retryCodes = retryCodesStr ? retryCodesStr.split(',').map(c => parseInt(c.trim())).filter(c => !isNaN(c)) : [401, 429]; const kc = { api_key: $('cfgApiKey').value, proxy_url: pu, proxy_pool_url: $('cfgProxyPoolUrl').value.trim(), proxy_pool_interval: parseInt($('cfgProxyPoolInterval').value) || 300, cache_proxy_url: pu ? $('cfgCacheProxyUrl').value : '', cf_clearance: cleanCf, x_statsig_id: $('cfgStatsigId').value, dynamic_statsig: $('cfgDynamicStatsig').checked, filtered_tags: $('cfgFilteredTags').value, show_thinking: $('cfgShowThinking').value === 'true', temporary: $('cfgTemporary').value === 'true', stream_chunk_timeout: parseInt($('cfgStreamChunkTimeout').value) || 120, stream_first_response_timeout: parseInt($('cfgStreamFirstResponseTimeout').value) || 30, stream_total_timeout: parseInt($('cfgStreamTotalTimeout').value) || 600, retry_status_codes: retryCodes }; try { const r = await apiRequest('/api/settings'); if (!r) return; const d = await r.json(); if (!d.success) return showToast('加载配置失败', 'error'); const s = await apiRequest('/api/settings', { method: 'POST', body: JSON.stringify({ global_config: d.data.global, grok_config: kc }) }); if (!s) return; const sd = await s.json(); sd.success ? showToast('Grok配置保存成功', 'success') : showToast('保存失败: ' + (sd.error || '未知错误'), 'error') } catch (e) { showToast('保存失败: ' + e.message, 'error') } };
     const updateHoverCardPosition = c => { const t = c.querySelector('.hover-card-trigger'), ct = c.querySelector('.hover-card-content'); if (!t || !ct) return; const { top, bottom } = t.getBoundingClientRect(), h = window.innerHeight; ct.classList.remove('top', 'bottom'); const { visibility: v, opacity: o } = getComputedStyle(ct); Object.assign(ct.style, { visibility: 'hidden', opacity: '1' }); const ch = ct.offsetHeight; Object.assign(ct.style, { visibility: v, opacity: o }); ct.classList.add(top > ch + 10 ? 'top' : h - bottom > ch + 10 ? 'bottom' : 'top') };
     const loadStorageMode = async () => { const modeConfig = { MYSQL: { classes: ['bg-blue-50', 'text-blue-700', 'border-blue-200'], tooltip: '数据库连接模式 - 数据持久化存储，修改配置时可能稍慢但更安全' }, REDIS: { classes: ['bg-purple-50', 'text-purple-700', 'border-purple-200'], tooltip: 'Redis缓存模式 - 高速内存存储，数据持久化且读写性能极佳' }, FILE: { classes: ['bg-green-50', 'text-green-700', 'border-green-200'], tooltip: '文件存储模式 - 本地文件存储，读写速度快' } }; const applyMode = (mode) => { $('storageModeText').textContent = mode; const config = modeConfig[mode] || modeConfig.FILE; $('storageMode').classList.add(...config.classes); $('storageModeTooltip').textContent = config.tooltip; updateHoverCardPosition($('storageMode').closest('.hover-card')) }; try { const r = await apiRequest('/api/storage/mode'); if (!r) return; const d = await r.json(); d.success && applyMode(d.data.mode) } catch (e) { console.error('加载存储模式失败:', e); applyMode('FILE') } };
-    window.addEventListener('DOMContentLoaded', () => { loadStorageMode(); refreshTokens(); initCacheViewer(); setInterval(() => { loadStats(); updateRemaining() }, 30000); window.addEventListener('resize', () => { const hoverCard = $('storageMode').closest('.hover-card'); hoverCard && updateHoverCardPosition(hoverCard) }); const hoverCard = $('storageMode').closest('.hover-card'), trigger = hoverCard?.querySelector('.hover-card-trigger'), content = hoverCard?.querySelector('.hover-card-content'); if (trigger && content) { trigger.addEventListener('mouseenter', () => { content.style.opacity = '1'; content.style.visibility = 'visible' }); trigger.addEventListener('mouseleave', () => { content.style.opacity = '0'; content.style.visibility = 'hidden' }) }; $('cfgProxyUrl').addEventListener('input', updateCacheProxyReadonly); $('cfgDynamicStatsig').addEventListener('change', updateStatsigIdState) });
+    window.addEventListener('DOMContentLoaded', () => { loadStorageMode(); refreshTokens(); loadRecoveryStatus(); initCacheViewer(); setInterval(() => { loadStats(); updateRemaining() }, 30000); window.addEventListener('resize', () => { const hoverCard = $('storageMode').closest('.hover-card'); hoverCard && updateHoverCardPosition(hoverCard) }); const hoverCard = $('storageMode').closest('.hover-card'), trigger = hoverCard?.querySelector('.hover-card-trigger'), content = hoverCard?.querySelector('.hover-card-content'); if (trigger && content) { trigger.addEventListener('mouseenter', () => { content.style.opacity = '1'; content.style.visibility = 'visible' }); trigger.addEventListener('mouseleave', () => { content.style.opacity = '0'; content.style.visibility = 'hidden' }) }; $('cfgProxyUrl').addEventListener('input', updateCacheProxyReadonly); $('cfgDynamicStatsig').addEventListener('change', updateStatsigIdState) });
   </script>
 </body>
 

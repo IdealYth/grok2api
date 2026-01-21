@@ -86,6 +86,10 @@ async def lifespan(app: FastAPI):
     
     # 4. 启动批量保存任务
     await token_manager.start_batch_save()
+    
+    # 4.5. 启动自动恢复任务
+    await token_manager.start_auto_recovery()
+    logger.info("[Grok2API] 自动恢复任务已启动")
 
     # 5. 管理MCP服务的生命周期
     mcp_lifespan_context = mcp_app.lifespan(app)
@@ -102,7 +106,11 @@ async def lifespan(app: FastAPI):
         await mcp_lifespan_context.__aexit__(None, None, None)
         logger.info("[MCP] MCP服务已关闭")
         
-        # 2. 关闭批量保存任务并刷新数据
+        # 2. 停止自动恢复任务
+        await token_manager.stop_auto_recovery()
+        logger.info("[Token] 自动恢复任务已停止")
+        
+        # 3. 关闭批量保存任务并刷新数据
         await token_manager.shutdown()
         logger.info("[Token] Token管理器已关闭")
         
