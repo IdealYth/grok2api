@@ -41,6 +41,7 @@ class RequestLogger:
         self._logs: Deque[Dict] = deque(maxlen=max_len)
         self._lock = asyncio.Lock()
         self._loaded = False
+        self._save_task = None
         
         self._initialized = True
 
@@ -66,8 +67,10 @@ class RequestLogger:
                     if isinstance(data, list):
                         self._logs.clear()
                         self._logs.extend(data)
-                    self._loaded = True
                     logger.debug(f"[Logger] 加载日志成功: {len(self._logs)} 条")
+
+                # 即使文件为空也视为已完成初始化，避免重复读取
+                self._loaded = True
         except Exception as e:
             logger.error(f"[Logger] 加载日志失败: {e}")
             self._loaded = True
@@ -121,8 +124,10 @@ class RequestLogger:
             async with self._lock:
                 self._logs.appendleft(log) # 最新的在前
                 
-            # 异步保存
-            asyncio.create_task(self._save_data())
+            # 合并保存任务，避免高并发下创建过多后台任务
+            if self._save_task and not self._save_task.done():
+                return
+            self._save_task = asyncio.create_task(self._save_data())
                 
         except Exception as e:
             logger.error(f"[Logger] 记录日志失败: {e}")
@@ -132,6 +137,17 @@ class RequestLogger:
         async with self._lock:
             return list(self._logs)[:limit]
     
+    async def flush(self):
+        """等待未完成的保存任务并确保落盘"""
+        task = self._save_task
+        if task and not task.done():
+            try:
+                await task
+            except Exception as e:
+                logger.warning(f"[Logger] 等待保存任务失败: {e}")
+
+        await self._save_data()
+
     async def clear_logs(self):
         """清空日志"""
         async with self._lock:
