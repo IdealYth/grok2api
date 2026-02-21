@@ -6,6 +6,19 @@ from typing import Dict, Any, Tuple
 
 # 模型配置
 _MODEL_CONFIG: Dict[str, Dict[str, Any]] = {
+    "grok-3": {
+        "grok_model": ("grok-3", "MODEL_MODE_GROK_3"),
+        "rate_limit_model": "grok-3",
+        "cost": {"type": "low_cost", "multiplier": 1, "description": "计1次调用"},
+        "requires_super": False,
+        "display_name": "Grok 3",
+        "description": "Standard Grok 3 model",
+        "raw_model_path": "xai/grok-3",
+        "default_temperature": 1.0,
+        "default_max_output_tokens": 8192,
+        "supported_max_output_tokens": 131072,
+        "default_top_p": 0.95
+    },
     "grok-3-fast": {
         "grok_model": ("grok-3", "MODEL_MODE_FAST"),
         "rate_limit_model": "grok-3",
@@ -13,6 +26,32 @@ _MODEL_CONFIG: Dict[str, Dict[str, Any]] = {
         "requires_super": False,
         "display_name": "Grok 3 Fast",
         "description": "Fast and efficient Grok 3 model",
+        "raw_model_path": "xai/grok-3",
+        "default_temperature": 1.0,
+        "default_max_output_tokens": 8192,
+        "supported_max_output_tokens": 131072,
+        "default_top_p": 0.95
+    },
+    "grok-3-mini": {
+        "grok_model": ("grok-3", "MODEL_MODE_GROK_3_MINI_THINKING"),
+        "rate_limit_model": "grok-3",
+        "cost": {"type": "low_cost", "multiplier": 1, "description": "计1次调用"},
+        "requires_super": False,
+        "display_name": "Grok 3 Mini",
+        "description": "Grok 3 mini thinking model",
+        "raw_model_path": "xai/grok-3",
+        "default_temperature": 1.0,
+        "default_max_output_tokens": 8192,
+        "supported_max_output_tokens": 131072,
+        "default_top_p": 0.95
+    },
+    "grok-3-thinking": {
+        "grok_model": ("grok-3", "MODEL_MODE_GROK_3_THINKING"),
+        "rate_limit_model": "grok-3",
+        "cost": {"type": "low_cost", "multiplier": 1, "description": "计1次调用"},
+        "requires_super": False,
+        "display_name": "Grok 3 Thinking",
+        "description": "Grok 3 thinking model with deep reasoning",
         "raw_model_path": "xai/grok-3",
         "default_temperature": 1.0,
         "default_max_output_tokens": 8192,
@@ -27,6 +66,32 @@ _MODEL_CONFIG: Dict[str, Dict[str, Any]] = {
         "display_name": "Grok 4 Fast",
         "description": "Fast version of Grok 4 with mini thinking capabilities",
         "raw_model_path": "xai/grok-4-mini-thinking-tahoe",
+        "default_temperature": 1.0,
+        "default_max_output_tokens": 8192,
+        "supported_max_output_tokens": 131072,
+        "default_top_p": 0.95
+    },
+    "grok-4-mini": {
+        "grok_model": ("grok-4-mini", "MODEL_MODE_GROK_4_MINI_THINKING"),
+        "rate_limit_model": "grok-4-mini",
+        "cost": {"type": "low_cost", "multiplier": 1, "description": "计1次调用"},
+        "requires_super": False,
+        "display_name": "Grok 4 Mini",
+        "description": "Grok 4 mini thinking model",
+        "raw_model_path": "xai/grok-4-mini",
+        "default_temperature": 1.0,
+        "default_max_output_tokens": 8192,
+        "supported_max_output_tokens": 131072,
+        "default_top_p": 0.95
+    },
+    "grok-4-thinking": {
+        "grok_model": ("grok-4", "MODEL_MODE_GROK_4_THINKING"),
+        "rate_limit_model": "grok-4",
+        "cost": {"type": "low_cost", "multiplier": 1, "description": "计1次调用"},
+        "requires_super": False,
+        "display_name": "Grok 4 Thinking",
+        "description": "Grok 4 thinking model with deep reasoning",
+        "raw_model_path": "xai/grok-4",
         "default_temperature": 1.0,
         "default_max_output_tokens": 8192,
         "supported_max_output_tokens": 131072,
@@ -84,8 +149,47 @@ _MODEL_CONFIG: Dict[str, Dict[str, Any]] = {
         "supported_max_output_tokens": 131072,
         "default_top_p": 0.95
     },
+    "grok-4.1-mini": {
+        "grok_model": ("grok-4-1-thinking-1129", "MODEL_MODE_GROK_4_1_MINI_THINKING"),
+        "rate_limit_model": "grok-4-1-thinking-1129",
+        "cost": {"type": "low_cost", "multiplier": 1, "description": "计1次调用"},
+        "requires_super": False,
+        "display_name": "Grok 4.1 Mini",
+        "description": "Grok 4.1 mini thinking model",
+        "raw_model_path": "xai/grok-4-1-thinking-1129",
+        "default_temperature": 1.0,
+        "default_max_output_tokens": 8192,
+        "supported_max_output_tokens": 131072,
+        "default_top_p": 0.95
+    },
+    "grok-4.1-fast": {
+        "grok_model": ("grok-4-1-thinking-1129", "MODEL_MODE_FAST"),
+        "rate_limit_model": "grok-4-1-thinking-1129",
+        "cost": {"type": "low_cost", "multiplier": 1, "description": "计1次调用"},
+        "requires_super": False,
+        "display_name": "Grok 4.1 Fast",
+        "description": "Fast version of Grok 4.1",
+        "raw_model_path": "xai/grok-4-1-thinking-1129",
+        "default_temperature": 1.0,
+        "default_max_output_tokens": 8192,
+        "supported_max_output_tokens": 131072,
+        "default_top_p": 0.95
+    },
+    "grok-4.1-expert": {
+        "grok_model": ("grok-4-1-thinking-1129", "MODEL_MODE_EXPERT"),
+        "rate_limit_model": "grok-4-1-thinking-1129",
+        "cost": {"type": "high_cost", "multiplier": 4, "description": "计4次调用"},
+        "requires_super": False,
+        "display_name": "Grok 4.1 Expert",
+        "description": "Grok 4.1 expert mode with enhanced reasoning",
+        "raw_model_path": "xai/grok-4-1-thinking-1129",
+        "default_temperature": 1.0,
+        "default_max_output_tokens": 32768,
+        "supported_max_output_tokens": 131072,
+        "default_top_p": 0.95
+    },
     "grok-4.1-thinking": {
-        "grok_model": ("grok-4-1-thinking-1129", "MODEL_MODE_AUTO"),
+        "grok_model": ("grok-4-1-thinking-1129", "MODEL_MODE_GROK_4_1_THINKING"),
         "rate_limit_model": "grok-4-1-thinking-1129",
         "cost": {"type": "high_cost", "multiplier": 1, "description": "计1次调用"},
         "requires_super": False,
@@ -97,14 +201,67 @@ _MODEL_CONFIG: Dict[str, Dict[str, Any]] = {
         "supported_max_output_tokens": 131072,
         "default_top_p": 0.95
     },
+    "grok-4.20-beta": {
+        "grok_model": ("grok-420", "MODEL_MODE_GROK_420"),
+        "rate_limit_model": "grok-420",
+        "cost": {"type": "low_cost", "multiplier": 1, "description": "计1次调用"},
+        "requires_super": False,
+        "display_name": "Grok 4.20 Beta",
+        "description": "Grok 4.20 beta model",
+        "raw_model_path": "xai/grok-420",
+        "default_temperature": 1.0,
+        "default_max_output_tokens": 8192,
+        "supported_max_output_tokens": 131072,
+        "default_top_p": 0.95
+    },
     "grok-imagine-0.9": {
         "grok_model": ("grok-3", "MODEL_MODE_FAST"),
         "rate_limit_model": "grok-3",
         "cost": {"type": "low_cost", "multiplier": 1, "description": "计1次调用"},
         "requires_super": False,
         "display_name": "Grok Imagine 0.9",
-        "description": "Image and video generation model. Supports text-to-image and image-to-video generation.",
+        "description": "Image and video generation model (legacy)",
         "raw_model_path": "xai/grok-imagine-0.9",
+        "default_temperature": 1.0,
+        "default_max_output_tokens": 8192,
+        "supported_max_output_tokens": 131072,
+        "default_top_p": 0.95,
+        "is_video_model": True
+    },
+    "grok-imagine-1.0": {
+        "grok_model": ("grok-3", "MODEL_MODE_FAST"),
+        "rate_limit_model": "grok-3",
+        "cost": {"type": "high_cost", "multiplier": 1, "description": "计1次调用"},
+        "requires_super": False,
+        "display_name": "Grok Imagine 1.0",
+        "description": "Image generation model",
+        "raw_model_path": "xai/grok-imagine-1.0",
+        "default_temperature": 1.0,
+        "default_max_output_tokens": 8192,
+        "supported_max_output_tokens": 131072,
+        "default_top_p": 0.95
+    },
+    "grok-imagine-1.0-edit": {
+        "grok_model": ("imagine-image-edit", "MODEL_MODE_FAST"),
+        "rate_limit_model": "grok-3",
+        "cost": {"type": "high_cost", "multiplier": 1, "description": "计1次调用"},
+        "requires_super": False,
+        "display_name": "Grok Imagine 1.0 Edit",
+        "description": "Image editing model",
+        "raw_model_path": "xai/imagine-image-edit",
+        "default_temperature": 1.0,
+        "default_max_output_tokens": 8192,
+        "supported_max_output_tokens": 131072,
+        "default_top_p": 0.95
+    },
+    "grok-imagine-1.0-video": {
+        "grok_model": ("grok-3", "MODEL_MODE_FAST"),
+        "rate_limit_model": "grok-3",
+        "cost": {"type": "high_cost", "multiplier": 1, "description": "计1次调用"},
+        "requires_super": False,
+        "display_name": "Grok Imagine 1.0 Video",
+        "description": "Video generation model",
+        "raw_model_path": "xai/grok-imagine-1.0",
         "default_temperature": 1.0,
         "default_max_output_tokens": 8192,
         "supported_max_output_tokens": 131072,
@@ -122,14 +279,26 @@ class TokenType(Enum):
 
 class Models(Enum):
     """支持的模型"""
+    GROK_3 = "grok-3"
     GROK_3_FAST = "grok-3-fast"
-    GROK_4_1_THINKING = "grok-4.1-thinking"
+    GROK_3_MINI = "grok-3-mini"
+    GROK_3_THINKING = "grok-3-thinking"
+    GROK_4 = "grok-4"
     GROK_4_FAST = "grok-4-fast"
     GROK_4_FAST_EXPERT = "grok-4-fast-expert"
-    GROK_4 = "grok-4"
+    GROK_4_MINI = "grok-4-mini"
+    GROK_4_THINKING = "grok-4-thinking"
     GROK_4_EXPERT = "grok-4-expert"
     GROK_4_HEAVY = "grok-4-heavy"
+    GROK_4_1_MINI = "grok-4.1-mini"
+    GROK_4_1_FAST = "grok-4.1-fast"
+    GROK_4_1_EXPERT = "grok-4.1-expert"
+    GROK_4_1_THINKING = "grok-4.1-thinking"
+    GROK_4_20_BETA = "grok-4.20-beta"
     GROK_IMAGINE_0_9 = "grok-imagine-0.9"
+    GROK_IMAGINE_1_0 = "grok-imagine-1.0"
+    GROK_IMAGINE_1_0_EDIT = "grok-imagine-1.0-edit"
+    GROK_IMAGINE_1_0_VIDEO = "grok-imagine-1.0-video"
 
     @classmethod
     def get_model_info(cls, model: str) -> Dict[str, Any]:

@@ -33,8 +33,7 @@ COPY --from=builder /install /usr/local
 
 # 创建必要目录并准备非 root 运行用户
 RUN mkdir -p /app/logs /app/data/temp/image /app/data/temp/video && \
-  addgroup --system app && adduser --system --ingroup app app && \
-  chown -R app:app /app
+  addgroup --system app && adduser --system --ingroup app app
 
 # 复制应用代码
 COPY app/ ./app/
@@ -44,11 +43,14 @@ COPY main.py .
 COPY docker-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
+# 在所有 COPY 之后设置权限，确保 app 用户能读写所有文件
+RUN chown -R app:app /app
+
 # 删除 Python 字节码和缓存
 ENV PYTHONDONTWRITEBYTECODE=1 \
   PYTHONUNBUFFERED=1
 
-USER app
+# USER app  # 注释掉：Docker Volume 挂载会覆盖 chown 权限，导致写入失败
 
 EXPOSE 8000
 
